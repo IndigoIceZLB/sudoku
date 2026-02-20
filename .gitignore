@@ -1,0 +1,4 @@
+# .gitignore
+server
+.DS_Store
+.vscode
