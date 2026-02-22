@@ -10,28 +10,44 @@ import (
 	"github.com/IndigoIceZLB/sudoku-backend/sudoku"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/IndigoIceZLB/sudoku-backend/db"
 )
 
+// 定义接收前端提交数据的结构
+type ScoreRequest struct {
+	Username   string `json:"username" binding:"required"`
+	Difficulty string `json:"difficulty" binding:"required"`
+	TimeSpent  int    `json:"time_spent" binding:"required"`
+}
+
 func main() {
+	// 1. 初始化数据库
+	// 注意：在本地运行时，如果没设置环境变量，这里会报错退出
+	// 建议先在本地设置环境变量，或者部署后再测
+	db.InitDB()
+
 	r := gin.Default()
 
-	// 允许跨域请求 (CORS) - 这对后续前端开发很重要
 	r.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS") // 允许 POST
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type")       // 允许 JSON Header
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
 		c.Next()
 	})
 
 	r.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "Sudoku API is Ready!"})
+		c.JSON(http.StatusOK, gin.H{"message": "Sudoku API with Database is Ready!"})
 	})
 
-	// 新增接口：生成数独
-	// 访问示例：/api/new-game?level=easy
+	// 原有的生成游戏接口
 	r.GET("/api/new-game", func(c *gin.Context) {
-		// 获取难度参数，默认为 easy
 		levelStr := c.Query("level")
-		holes := 30 // 默认挖 30 个洞 (简单)
-
+		holes := 30
 		switch levelStr {
 		case "medium":
 			holes = 40
@@ -40,23 +56,54 @@ func main() {
 		case "expert":
 			holes = 55
 		}
-
-		// 调用核心算法
 		puzzle, solution := sudoku.Generate(holes)
-
-		// 返回 JSON
 		c.JSON(http.StatusOK, gin.H{
 			"difficulty": levelStr,
 			"holes":      holes,
-			"puzzle":     puzzle,   // 题目 (0 代表空格)
-			"solution":   solution, // 答案 (前端可以用来验证，或者暂时不发给前端防作弊)
+			"puzzle":     puzzle,
+			"solution":   solution,
 		})
+	})
+
+	// --- 新增接口 ---
+
+	// 1. 提交分数
+	r.POST("/api/submit-score", func(c *gin.Context) {
+		var req ScoreRequest
+		// 绑定 JSON 数据
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		// 保存到数据库
+		if err := db.SaveScore(req.Username, req.Difficulty, req.TimeSpent); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save score"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"status": "Score saved!"})
+	})
+
+	// 2. 获取排行榜
+	r.GET("/api/leaderboard", func(c *gin.Context) {
+		difficulty := c.Query("difficulty")
+		if difficulty == "" {
+			difficulty = "easy"
+		}
+
+		scores, err := db.GetTopScores(difficulty)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch leaderboard"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"leaderboard": scores})
 	})
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-
 	r.Run("0.0.0.0:" + port)
 }
