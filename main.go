@@ -26,15 +26,17 @@ type ScoreRequest struct {
 }
 
 func main() {
-	// 初始化数据库
-	db.InitDB()
+	// 1. 初始化数据库 (即使失败也继续启动 Web 服务，但在日志里报错)
+	if err := db.InitDB(); err != nil {
+		fmt.Printf("⚠️⚠️⚠️ DATABASE ERROR: %v\n", err)
+		fmt.Println("Server will start, but database features will fail.")
+	}
 
 	r := gin.Default()
 
-	// 🛑 核心修复：使用官方 CORS 中间件配置
-	// 这能解决 99% 的 "提交失败" 问题
+	// 2. 配置 CORS (允许所有跨域请求，这是最宽松的配置)
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"}, // 允许所有来源（生产环境可以改成你的前端域名）
+		AllowAllOrigins:  true, // 允许所有来源
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
@@ -43,7 +45,7 @@ func main() {
 	}))
 
 	r.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "Sudoku API is Ready!"})
+		c.JSON(http.StatusOK, gin.H{"message": "Sudoku API is running"})
 	})
 
 	r.GET("/api/new-game", func(c *gin.Context) {
@@ -67,18 +69,22 @@ func main() {
 	})
 
 	r.POST("/api/submit-score", func(c *gin.Context) {
-		var req ScoreRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			fmt.Println("Bind Error:", err) // 打印日志到 Render 控制台
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid data format"})
+		// 检查数据库是否就绪
+		if db.DB == nil {
+			fmt.Println("Error: Database not connected")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database not connected. Check server logs."})
 			return
 		}
 
-		fmt.Printf("Receiving score: %+v\n", req) // 打印接收到的数据
+		var req ScoreRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 
 		if err := db.SaveScore(req.Username, req.Difficulty, req.TimeSpent); err != nil {
-			fmt.Println("DB Error:", err) // 打印数据库错误
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+			fmt.Printf("Save Score Error: %v\n", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save score"})
 			return
 		}
 
@@ -86,12 +92,18 @@ func main() {
 	})
 
 	r.GET("/api/leaderboard", func(c *gin.Context) {
+		if db.DB == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database not connected"})
+			return
+		}
 		difficulty := c.Query("difficulty")
 		if difficulty == "" {
 			difficulty = "easy"
 		}
+
 		scores, err := db.GetTopScores(difficulty)
 		if err != nil {
+			fmt.Printf("Leaderboard Error: %v\n", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch leaderboard"})
 			return
 		}
