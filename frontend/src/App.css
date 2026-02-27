@@ -169,3 +169,67 @@ th, td {
 th {
   background-color: #f2f2f2;
 }
+/* --- 新增样式 --- */
+
+/* 工具栏 */
+.tools {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.btn-tool {
+  background-color: #f0ad4e; /* 橙色 */
+  color: white;
+  border: none;
+  border-radius: 4px;
+}
+
+.btn-tool:hover {
+  background-color: #ec971f;
+}
+
+.btn-danger {
+  background-color: #d9534f; /* 红色 */
+}
+
+.btn-danger:hover {
+  background-color: #c9302c;
+}
+
+.btn-secondary {
+  background-color: #5bc0de;
+  font-size: 0.9rem;
+  padding: 4px 10px;
+}
+
+/* 错误高亮 (红色背景，红色文字) */
+.cell.conflict {
+  background-color: #f8d7da !important;
+  color: #721c24 !important;
+  border: 1px solid #f5c6cb;
+  animation: shake 0.3s; /* 简单的震动动画 */
+}
+
+/* 提示文字 */
+.warning-text {
+  color: #d9534f;
+  font-size: 0.9rem;
+  margin-bottom: 10px;
+  font-weight: bold;
+}
+
+.error-msg {
+  color: #d9534f;
+  font-weight: bold;
+  margin: 10px 0;
+}
+
+/* 震动动画 */
+@keyframes shake {
+  0% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  50% { transform: translateX(5px); }
+  75% { transform: translateX(-5px); }
+  100% { transform: translateX(0); }
+}
